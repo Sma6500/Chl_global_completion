@@ -23,9 +23,14 @@ import numpy as np
 # +---------------------------------------------------------------------------------------+ #
 
 """
-généralement, index désigne l'index dans le tuple sorti par le réseau (psc,chl) par exemple 0 ou 1 ou 2 si (psc, chl, chl_anom)
-index_chl désigne l'index du channel sur lequel on veut contrôler, par exemple (psc, chl) : index=1 et index_chl=None
-mais si chl a plusieurs channel, on pourrait avoir index_chl=0 ou 1 (anomalie) ou -1  (signe)
+Generally, index refers to the position in the tuple output by the network (e.g., (psc, chl)), such as 0 or 1 — or 2 in the case of (psc, chl, chl_anom).
+
+index_chl refers to the index of the specific channel within the CHL output that you want to control.
+For example:
+
+For (psc, chl): index = 1 and index_chl = None
+
+If CHL has multiple channels, index_chl could be 0 or 1 (for anomaly), or -1 (for sign)
 
 """
 class MSE_Loss_masked(torch.nn.Module):

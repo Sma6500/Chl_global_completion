@@ -22,16 +22,13 @@ from config import model_config, dataloader_config, train_config, criterion_conf
 
 
 import numpy as np 
-import energyusage
 
 
 import sys
 sys.path.append("/home/luther/Documents/scripts_training/models/")
 sys.path.append("/usr/home/lollier/Documents/scripts_training/models/")
 
-from models.DBNet import DualBranchNet
-from models.SmaAt_DBNet import SmaAt_DualBranchNet
-from models.light_SmaAt_UNet import light_SmaAt_UNet
+
 from models.UNet import UNet
 from models.UNet_DSC import UNet_DSC
 from models.UNet_CBAM import UNet_CBAM
@@ -85,30 +82,10 @@ def main(model_config, dataloader_config, train_config, criterion_config, optimi
     else :
         time_encoded=False
         
-    #c'est pas très propre mais ça a le mérite d'être compatible avec toutes les configs y compris les anciennes
-    # psc=True,
-    # chl=False
-    # n_classes=4
-    # if 'chl' in model_config.keys() and model_config['chl']:
-    #     if model_config['chl']==1:
-    #         psc=False
-    #         chl=True
-    #         n_classes=3
-    #     elif model_config['chl']==2:
-    #         psc=False
-    #         chl=False
-    #         n_classes=1
-    #     elif model_config['chl']==3:
-    #         psc=False
-    #         chl=False
-    #         n_classes=2
 
-    #     else :
-    #         print("Attention, configuration manuelle de l'argument chl de model_config")
-            
-    #obsolète
     n_classes=model_config.get('n_classes', 4)
             
+#Model configurations available
 ########################################################################
     if model_config['model']=='UNet':
                
@@ -159,39 +136,6 @@ def main(model_config, dataloader_config, train_config, criterion_config, optimi
                        chl=model_config['chl'],
                        nb_layers=nb_layers,
                        time_encoded=time_encoded)
-        
-    #maintenant qu'on peut avoir des grosses tailles de batchs, la light Smaat est plus très pertinent    
-    elif model_config['model']=='light_SmaAt-UNet':
-        
-        print("attention, config outdated, pas de mise à jour pour l'option model_config[chl]")
-            
-        net=light_SmaAt_UNet(n_channels=model_config['in_channels'], 
-                            n_classes=n_classes,
-                            activation=activation,
-                            kernels_per_layer=model_config['kernels_per_layer'],
-                            psc=psc,
-                            chl=chl,
-                            nb_layers=nb_layers,
-                            depth=model_config['depth'])                 
-    
-    # elif model_config['model']=='PC_UNet':
-    #     #net=UNet(model_config['num_classes'], model_config['in_channels'], model_config['depth'], model_config['start_filts'], model_config['activation'])
-    #     net=PConvUNet(layer_size=7, input_channels=model_config['in_channels'], output_channels=model_config['num_classes'], upsampling_mode='bicubic')
-    #     model_config['Partial_conv']=True
-    #     dataloader_config['completion']=False
-    
-    # elif model_config['model']=='DualBranchNet':
-    #     net = DualBranchNet(depth=model_config['depth'], in_channels=model_config['in_channels'],
-    #                         merge_mode=model_config['merge_mode'], activation=model_config['activation'],
-    #                         freeze_key_id=model_config['freeze_key'])
-        
-    # elif model_config['model']=='SmaAt_DualBranchNet':
-    #     if not('kernels_per_layer' in model_config.keys()):
-    #         model_config['kernels_per_layer']=2
-    #     net=SmaAt_DualBranchNet(in_channels=model_config['in_channels'], 
-    #                             freeze_key_id=model_config['freeze_key'],
-    #                             activation=model_config['activation'],
-    #                             kernels_per_layer=model_config['kernels_per_layer'])
 
     else :
         raise ValueError("\"{}\" is not a valid mode for model.".format(model_config['model']))
@@ -260,40 +204,8 @@ if __name__ == '__main__':
 
     main(model_config, dataloader_config, train_config, criterion_config, optimizer_config, scheduler_config)
 
-    
-    #process_results(train_config['checkpoints_path'], train_config['name'])
+
     train_config['checkpoints_path']=train_config['checkpoints_path'][:-len(train_config['name'])]
-
-########################## entrainement double branche (hasbeen) #########################################################################
-    # if model_config['model']=='DualBranchNet' or model_config['model']=='SmaAt_DualBranchNet':
-    #     print('training chl finished, starting training psc')
-        
-    #     model_config['weight_load']=os.path.join(train_config['checkpoints_path'], train_config['name'], train_config['name']+'best_valid_loss.pt')
-    #     train_config['name']+='_psc'
-    #     train_config['comment']+=' psc'
-    #     model_config['freeze_key']='1'
-        
-    #     if 'KL_div' in criterion_config.keys() and criterion_config['KL_div']!=0.:   
-            
-    #         for key in criterion_config.keys():
-    #             criterion_config[key]=0.
-    #         criterion_config['KL_div']=1.  
-            
-    #     else :
-    #         for key in criterion_config.keys():
-    #             criterion_config[key]=0.
-    #         criterion_config['MSE_psc']=1.
-            
-    #     dataloader_config['transform']=None
-        
-        
-    #     main(model_config, dataloader_config, train_config, criterion_config, optimizer_config, scheduler_config)
-    #     # #process_results(train_config['checkpoints_path'], train_config['name'])
-
-    #     train_config['checkpoints_path']=train_config['checkpoints_path'][:-len(train_config['name'])]
-
-########################## entrainement double branche (hasbeen) #########################################################################
-
     
     for i in range(nb_training):
         print(f'\nTraining {i+1}\n')
@@ -302,22 +214,5 @@ if __name__ == '__main__':
         dataloader_config['transform']=None
         main(model_config, dataloader_config, train_config, criterion_config, optimizer_config, scheduler_config)
         train_config['checkpoints_path']=train_config['checkpoints_path'][:-len(train_config['name'])]
-        #process_results(train_config['checkpoints_path'], train_config['name'])
-        
-        # if model_config['model']=='DualBranchNet' or model_config['model']=='SmaAt_DualBranchNet':
-        #     print('training chl finished, starting training psc')
-        #     train_config['name']+='_psc'
-        #     train_config['comment']+=' psc'
-        #     for key in criterion_config.keys():
-        #         criterion_config[key]=0.
-        #     criterion_config['MSE_psc']=1.
-        #     dataloader_config['transform']=None
-            
-            
-        #     main(model_config, dataloader_config, train_config, criterion_config, optimizer_config, scheduler_config)
-            
-        #     #process_results(train_config['checkpoints_path'], train_config['name'])
 
-        #     train_config['checkpoints_path']=train_config['checkpoints_path'][:-len(train_config['name'])]
-    
                 

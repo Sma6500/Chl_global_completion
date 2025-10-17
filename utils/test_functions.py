@@ -5,8 +5,9 @@ Created on Mon Nov 13 11:33:15 2023
 
 @author: luther
 
-Notes : en fait ici j'importe  le dataloader correspondant mais en vrai c'est pas 
-utile parce que ya pas besoin de la chl ni des psc dans le dataloader.
+Test function to correctly save and load test experiments.
+
+Note: In this case, I import the corresponding dataloader, but it’s actually unnecessary since neither CHL nor PSC are needed in the dataloader.
 
 """
 
@@ -110,65 +111,8 @@ class config():
             print('#'*80)
         except : print("hyperparameters not available")
              
-#############################test data generator################################
-
-# def build_data_gen(physics, psc, chl, path_result, dataloader_config, scaler):
-    
-#     import sys
-#     sys.path.append(path_result)
-#     from dataloaders import Dataset_psc_chl
-#     from torch.utils.data import DataLoader
-    
-#     if dataloader_config['log_chl']:
-#         chl=np.log10(chl)
-    
-#     physics=np.swapaxes(scaler.fit_transform(np.swapaxes(physics, 1, -1)),-1,1)     
-
-#     if dataloader_config['norm_chl']:
-#         chl=np.squeeze(scaler.fit_transform(np.expand_dims(chl, -1)))     
-    
-    
-#     total_timesteps = physics.shape[0]
-
-#     # Number of timesteps per year
-#     timesteps_per_year = 46
-    
-#     # Calculate the total number of years in the dataset
-#     total_years = total_timesteps // timesteps_per_year
-    
-#     # Initialize indices
-
-#     test_indices = []
-    
-#     # Iterate over years and append indices to sets
-#     for i in range(total_years):
-#         start_idx = i * timesteps_per_year
-#         end_idx = (i + 1) * timesteps_per_year
-        
-#         if i==9 or i==16:
-#             test_indices.append(slice(start_idx, end_idx))
-
-        
-#     #test_indices=slice(-46*2,None) #on prend les 2 dernières années pour le test
-
-#     physics_testset=np.concatenate([physics[index] for index in test_indices])
-#     psc_testset=np.concatenate([psc[index] for index in test_indices])
-#     chl_testset=np.concatenate([chl[index] for index in test_indices])    
-     
-#     test_dataset=Dataset_psc_chl(physics_testset,chl_testset, psc_testset, transform=dataloader_config['transform'], completion=dataloader_config['completion'])
-#     test_generator = DataLoader(test_dataset, batch_size=1, shuffle=False)
-
-#     glob_dataset=Dataset_psc_chl(physics, chl, psc, transform=dataloader_config['transform'], completion=dataloader_config['completion'])
-#     glob_generator = DataLoader(glob_dataset, batch_size=1, shuffle=False)
-    
-#     return glob_generator, test_generator
 
 
-#################Load Net, predictions and test predictions#####################
-
-#bon là je vais load la config sauvegardée dans les résultats mais en soit
-#vu que j'execute le notebook directement dans le script training je pourrais
-#probablement charger directement le fichier config.py
 from torch import load
 import os
 import numpy as np 

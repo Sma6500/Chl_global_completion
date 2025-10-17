@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Mon Jan 27 15:34:48 2025
+Created on Fri Mar 15 11:59:27 2024
 
 @author: luther
+
+Load the data (this dataloader is for CHL and PSC; for CHL only, see dataloaders_chl in the completion folder)
+
+Apply preprocessing (compute mean and standard deviation for normalization, clip outlier values, take the logarithm of chlorophyll)
+
+Create the training, validation, and test sets
 
 """
 # +---------------------------------------------------------------------------------------+ #
@@ -11,14 +17,21 @@ Created on Mon Jan 27 15:34:48 2025
 # |                                         DATALOADERS                                   | #
 # |                                                                                       | #
 # +---------------------------------------------------------------------------------------+ #
+
 import numpy as np
 import pandas as pd
-import xarray as xr
-from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler, RandomSampler
 import torch
-from utils.scaler import MinMaxScaler, StandardScaler
-from utils.functions import extend_nan_both_dimensions
-from utils.transform import CustomCrop,CustomMask
+from torch.utils.data import Dataset, DataLoader
+from sklearn.model_selection import train_test_split
+from utils.scaler import MinMaxScaler, StandardScaler, StandardScaler_xarray
+import xarray as xr
+import dask.array as da
+from torch.utils.data import Dataset, DataLoader
+from sklearn.model_selection import train_test_split
+import torch
+import sys
+from utils.plot import imshow_area
+
 
 # +---------------------------------------------------------------------------------------+ #
 # |                                                                                       | #
@@ -27,221 +40,249 @@ from utils.transform import CustomCrop,CustomMask
 # |                                                                                       | #
 # +---------------------------------------------------------------------------------------+ #
 
-
+#not mandatory bot sometimes useful with dask arrays, 10000 is still an acceptable number but do not go much higher
+sys.setrecursionlimit(10000)
 
 class Dataset_psc_chl(Dataset):
 
-    def __init__(self, physics, psc, transform=None, completion='inf value'):
-        super().__init__()
+    def __init__(self, mask, indexs, scaler_phy, scaler_chl, dataloader_config, transform=None, completion='inf value', test=False):
 
-        if completion not in ('inf value', 'zeros'):
-            raise ValueError(f"\"{completion}\" in dataset settings is not a valid completion set up. Only \"inf value\" and \"zeros\" are allowed.")
+        super(Dataset_psc_chl, self).__init__()
+        
+        if completion in ('inf value', 'zeros'):
+            self.completion=completion
+        else:
+            raise ValueError("\"{}\" is not valid for "
+                             "completion. Only \"inf value\" and "
+                             "\"zeros\" are allowed.".format(completion))
+            
+        self.dataloader_config=dataloader_config
+        self.test=test
+        print('initilisation du dataset')
 
-        self.completion = completion
-        self.dataset_physics = physics
-        self.dataset_psc = psc
-        self.transform = transform 
-        print("care, transform only applied on input")
+        if not(test):
+            self.physics_dataset=xr.open_dataset(self.dataloader_config['dataset_path_inputs'], chunks={'time': 100}).to_array(dim='variables').astype('float16').data[:,indexs].compute()
+            print('données physics chargée')
 
+            self.chl_dataset = xr.open_dataset(self.dataloader_config['dataset_path_chl_psc'], chunks={'time': 100}).to_array(dim='variables').astype('float16').sel(variables='CHL').data[indexs].compute()
+            print('données chl chargée')
 
+            self.psc_dataset = xr.open_dataset(self.dataloader_config['dataset_path_chl_psc'], chunks={'time': 100}).to_array(dim='variables').astype('float16').sel(variables=['Micro','Nano','Pico']).data[:,indexs].compute()
+            print('données psc chargée')
+
+        else : 
+            self.physics_dataset=xr.open_dataset(self.dataloader_config['dataset_path_inputs'], chunks={'time': 100}).to_array(dim='variables').data
+            self.chl_dataset = xr.open_dataset(self.dataloader_config['dataset_path_chl_psc'], chunks={'time': 100}).to_array(dim='variables').sel(variables='CHL').data
+            self.psc_dataset = xr.open_dataset(self.dataloader_config['dataset_path_chl_psc'], chunks={'time': 100}).to_array(dim='variables').sel(variables=['Micro','Nano','Pico']).data
+        
+        #self.path_physics = physics_path
+        #self.path_chl_psc=chl_psc_path
+        self.scaler_phy, self.scaler_chl = scaler_phy, scaler_chl
+        self.transform = transform
+        self.mask= mask
+        self.indexs=indexs
+            
+        
+            
     def __len__(self):
-        return len(self.dataset_physics)
+        return len(self.indexs) 
 
     def __getitem__(self, index):
         """
-        Main function of the CustomDataset class.
+        Main function of the CustomDataset class. 
         """
-        inputs = self.dataset_physics[index]
         
-        fill_value = -1000 if self.completion == 'inf value' else 0.
-        inputs = np.nan_to_num(inputs, nan=fill_value)
+        if self.test :
+            
+            physics=self.physics_dataset[:,index].compute()
+            chl=self.chl_dataset[index].compute()
+            psc=self.psc_dataset[:,index].compute()
 
-        # Convert to tensors
-        inputs = torch.as_tensor(inputs, dtype=torch.float32)
-        psc = torch.as_tensor(self.dataset_psc[index], dtype=torch.float32)
+        else : 
+            physics=self.physics_dataset[:,index]
+            chl=self.chl_dataset[index]
+            psc=self.psc_dataset[:,index]
 
-        # Apply transform if defined
-        if self.transform:
-            inputs = self.transform(inputs)
-            #chl = self.transform(chl)
-            #psc = self.transform(psc)
-
-        return  inputs, tuple(psc.unsqueeze(0))
-        #return inputs, (chl.unsqueeze(0), chl_anom.unsqueeze(0)) if chl_anom is not None else inputs, chl.unsqueeze(0))
-
-
-def load_data(path, variables=None):
-    """ Load dataset based on file type (.nc or .npy). """
-    if path.endswith(".nc"):
-        return xr.open_dataset(path)[variables].to_array(dim='variables').data if variables else xr.open_dataset(path)['CHL1_mean'].values
-    elif path.endswith(".npy"):
-        return np.load(path)
-    else:
-        raise ValueError(f"Unsupported file format: {path}")
         
+        # on convertit les inf en nan  (c'est surtout pour le rotationnel du vent)
+        physics = np.where(np.isinf(physics,), np.nan, physics)
+        if self.dataloader_config['log_chl']:
+            epsilon=1e-5
+            chl=np.clip(chl,epsilon,10)
+            chl=np.log10(chl)
         
+        chl = np.where(self.mask[index]==2,np.nan, chl)
+        psc = np.where(np.repeat(self.mask[np.newaxis,index],3,axis=0)==2,np.nan, psc)
+        
+        chl_masked=np.where(self.mask[index]==1,np.nan, chl)
+        psc_masked=np.where(np.repeat(self.mask[np.newaxis,index],3,axis=0)==1,np.nan, psc)
+        
+
+        # apply normalization
+        physics=(physics - self.scaler_phy.mean[:,*[np.newaxis for i in range(len(physics.shape)-1)]]) / (self.scaler_phy.std[:,*[np.newaxis for i in range(len(physics.shape)-1)]] + self.scaler_phy.epsilon)
+        
+        chl=(chl-self.scaler_chl.mean)/self.scaler_chl.std
+        chl_masked=(chl_masked-self.scaler_chl.mean)/self.scaler_chl.std
+
+        inputs=np.concatenate((physics, chl_masked[np.newaxis], psc_masked))
+        #inputs=np.concatenate((physics, chl[np.newaxis], psc))
+
+        
+        if self.completion=='inf value' : 
+            inputs=np.where(da.isnan(inputs),-1000,inputs)
+        elif self.completion=='zeros' :
+            inputs=np.nan_to_num(inputs)
+        
+        inputs = torch.tensor(inputs, dtype=torch.float32)
+
+        chl = torch.tensor(chl[np.newaxis], dtype=torch.float32)
+        psc = torch.tensor(psc, dtype=torch.float32)
+
+
+        if self.transform is not None:
+            
+            inputs=self.transform(inputs)   
+            psc=self.transform(psc)
+            chl=self.transform(chl)
+                
+            
+        return inputs, (psc, chl)
+ 
+
 def coord_to_index(lon, lat):
-    #retourne un tuple lat, lon index correspondant aux index associés au coordonnées dans le dataset
-    idx_lon=lon+180
-    idx_lat=50-lat    
-    return (idx_lat, idx_lon)
+    return 100 - lat, lon + 180
 
-def compute_anomalies(array, lenght_year=12):
-    timestep=len(array)#we suppose that t is the first dim
-    shape=array.shape
-    weekly_mean=np.concatenate([np.nanmean(array.reshape(timestep//lenght_year,lenght_year,*shape[1:]),axis=0)]*(timestep//lenght_year))
-    return array-weekly_mean
+
+
 
 def get_dataloaders(dataloader_config):
     """
-    Loads datasets, applies preprocessing, and returns PyTorch dataloaders.
+    Parameters
+    ----------
+    dataloader_config : dict
+        dataloader configuration (see config.py).
+
+    Returns
+    -------
+    Pytorch Dataloader or dict of Dataloader 
     """
-
-    print("Côtes masquées à 2 pixels")
-
-    # Load physics data
-    physics = load_data(dataloader_config['dataset_path_inputs'], ['mld', 'sst', 'sss', 'ssh', 'solar', 'norm_currents', 'vort_winds'])
-    physics = np.swapaxes(physics, 0, 1) if len(physics) < 10 else physics  # Swap axes only for .nc files, in nc files the variables are on the first axis instead of the second one
-    physics=physics[48:]
-    # Apply coastal mask
-    mask_coast = np.where(np.isnan(extend_nan_both_dimensions(physics[0, 0], steps=2)), np.nan, 1)
-    physics *= mask_coast
-    physics_tot = np.load(dataloader_config["dataset_path_inputs_test"])
-    physics_tot *= mask_coast
-
-    # Load chlorophyll data
-    #chl = load_data(dataloader_config['dataset_path_chl']) * mask_coast
     
-    # Load PSC data
-    psc = load_data(dataloader_config['dataset_path_psc'],variables=['Micro','Nano','Pico']) * mask_coast
-    psc = np.swapaxes(psc, 0, 1) if len(psc) < 10 else psc  # Swap axes only for .nc files, in nc files the variables are on the first axis instead of the second one
-    psc=np.clip(psc, 0, 1)
-
-    # Compute anomalies if enabled
-    phy_anom, chl_anom = None, None
-    if dataloader_config.get('phy_anomalies', False):
-        phy_anom = compute_anomalies(physics,dataloader_config.get('lenght_year', 12))[:, dataloader_config['phy_anomalies']]
-        physics_anom_tot = compute_anomalies(physics_tot,dataloader_config.get('lenght_year', 12))[:, dataloader_config['phy_anomalies']]
-
-    #if dataloader_config.get('chl_anomalies', False):
-    #    chl_anom = np.sign(compute_anomalies(chl,dataloader_config.get('lenght_year', 12))) * (np.log10(np.clip(np.abs(compute_anomalies(chl,dataloader_config.get('lenght_year', 12))), 1e-5, 10)) + 5)
-
-    # Select physical variables
-    variables_physiques = dataloader_config.get('variables_physiques', slice(None))
-    physics = physics[:, variables_physiques]
-    physics_tot = physics_tot[:, variables_physiques]
+    physics = xr.open_dataset(dataloader_config['dataset_path_inputs'], chunks='auto').to_array(dim='variables').data
+    chl = xr.open_dataset(dataloader_config['dataset_path_chl_psc'], chunks='auto').to_array(dim='variables').sel(variables=['CHL']).data.squeeze()
     
-    if dataloader_config.get('phy_anomalies', False):
-        physics = np.concatenate([physics, phy_anom], axis=1)
-        physics_tot=np.concatenate([physics_tot, physics_anom_tot], axis=1)
-        
-    # Remove test stations
-    for station, coords in dataloader_config['stations_coord'].items():
-        lat_idx, lon_idx = coord_to_index(*coords)
-        #chl[:, lat_idx, lon_idx] = np.nan
-        psc[..., lat_idx, lon_idx]=np.nan
-        #if chl_anom is not None:
-        #    chl_anom[:, lat_idx, lon_idx] = np.nan
-
-    # Convert infinities to NaN
-    physics = np.where(np.isinf(physics), np.nan, physics)
-    physics_tot = np.where(np.isinf(physics_tot), np.nan, physics_tot)
-
-    # Apply log transformation to chl
+    #on convertit les inf en nan  (c'est surtout pour le rotationnel du vent)
+    physics = da.where(da.isinf(physics), np.nan, physics)
+    
     if dataloader_config['log_chl']:
-        print('psc logged')
-        #chl = np.log10(np.clip(chl, 1e-5, 10))
-        psc = np.log10(np.clip(psc, 1e-5, 10))
+        epsilon=1e-5
+        chl=da.clip(chl,epsilon,10)
+        chl=da.log10(chl)
+            
+    #################################Masking with cloud like mask#################################
 
+    #completion part, we create a masked database from cloud mask
+    cloud_data=np.load("/home/luther/Documents/npy_data/cloud_mask_avw_1d_100km_glob.npy",  mmap_mode='r').astype(np.float32)
 
-    # Split dataset into train, validation, and test
-    total_timesteps, timesteps_per_year = physics.shape[0], dataloader_config.get('lenght_year', 12)
-    total_years = total_timesteps // timesteps_per_year
-
-    train_idx, valid_idx, test_idx = [], [], []
     
-    for i in range(total_years):
-        indices = slice(i * timesteps_per_year, (i + 1) * timesteps_per_year)
-        if i <=  13 or i==22 : #2024
-            test_idx.append(indices)
-        elif i<=15: #2016,2017
-            valid_idx.append(indices)
-        else: #2018-2023
-            train_idx.append(indices)
-
-    def create_subset(slices, data):
-        return np.concatenate([data[s] for s in slices], axis=0)
-
-    # Create train/valid/test sets
-    physics_trainset = create_subset(train_idx, physics)
-    physics_validset = create_subset(valid_idx, physics)
-    physics_testset = np.copy(physics_tot)
-
-    #chl_trainset = create_subset(train_idx, chl)
-    #chl_validset = create_subset(valid_idx, chl)
-    #chl_testset = np.zeros_like(physics_tot[:,0])
+    random_index=np.random.randint(0,cloud_data.shape[0],size=(chl.shape[0])) #we've got a problem here folks, we cannot retrieve the exact mean and std used for training. 
+    random_mask=cloud_data[random_index]
     
-    psc_trainset = create_subset(train_idx, psc)
-    psc_validset = create_subset(valid_idx, psc)
-    psc_testset = np.zeros((physics_tot.shape[0],3,100,360))
-
-    #chl_anom_trainset = create_subset(train_idx, chl_anom) if chl_anom is not None else None
-    #chl_anom_validset = create_subset(valid_idx, chl_anom) if chl_anom is not None else None
-    #chl_anom_testset = np.zeros_like(physics_tot[:,0]) if chl_anom is not None else None
-
-    # Normalize datasets
-    if dataloader_config['norm_mode']: 
-        if not(dataloader_config['norm_mode'] in ('min_max', 'standard')):
-            raise ValueError("\"{}\" is not a valid mode for "
-                             "splitting. Only \"min_max\" and \"standard\" are allowed.".format(dataloader_config['norm_mode']))   
-        if dataloader_config['norm_mode']=='standard':
-            scaler_phy=StandardScaler()
-            scaler_psc=StandardScaler()
-            #scaler_chl_anom=StandardScaler()
-
-        elif dataloader_config['norm_mode']=='min_max':
-            scaler_phy=MinMaxScaler()
-            scaler_psc=MinMaxScaler()
-            #scaler_chl_anom=MinMaxScaler()
-
-    physics_trainset = np.swapaxes(scaler_phy.fit_transform(np.swapaxes(physics_trainset, 1, -1)), -1, 1)
-    physics_validset = np.swapaxes(scaler_phy.transform(np.swapaxes(physics_validset, 1, -1)), -1, 1)
-    physics_testset = np.swapaxes(scaler_phy.transform(np.swapaxes(physics_testset, 1, -1)), -1, 1)
-
-    psc_trainset = np.swapaxes(scaler_psc.fit_transform(np.swapaxes(psc_trainset,1,-1)), -1, 1)
-    psc_validset = np.swapaxes(scaler_psc.transform(np.swapaxes(psc_validset, 1, -1)), -1, 1)
-
-    #if chl_anom is not None:
-    #    chl_anom_trainset = np.squeeze(scaler_chl_anom.fit_transform(np.expand_dims(chl_anom_trainset, -1)))
-    #    chl_anom_validset = np.squeeze(scaler_chl_anom.transform(np.expand_dims(chl_anom_validset, -1)))
+    # Mask out specified stations
+    # Build a mask to add to the random_mask
         
-    # Create datasets
-    training_set = Dataset_psc_chl(physics_trainset, psc_trainset, transform=dataloader_config['transform'], completion=dataloader_config['completion'])
-    validation_set = Dataset_psc_chl(physics_validset, psc_validset, transform=dataloader_config['transform'], completion=dataloader_config['completion'])
-    test_set = Dataset_psc_chl(physics_testset, psc_testset, transform=dataloader_config['transform'], completion=dataloader_config['completion'])
+    for station, coord in dataloader_config['stations_coord'].items():
+        idx_lat, idx_lon = coord_to_index(*coord)
+        random_mask[..., idx_lat, idx_lon] = 2
+        
 
-    # Create dataloaders
-    training_generator = DataLoader(training_set, batch_size=dataloader_config['batch_size'], shuffle=True)
-    validation_generator = DataLoader(validation_set, batch_size=dataloader_config['batch_size'], shuffle=True)
-    test_generator = DataLoader(test_set, batch_size=1, shuffle=False)
+    chl=da.where(random_mask>=1,chl,np.nan) #pour le calcul de la normalisation
 
-    #if dataloader_config.get('chl_anomalies', False):
-    #    return training_generator, validation_generator, test_generator, (scaler_chl, scaler_chl_anom)
-    return training_generator, validation_generator, test_generator, scaler_psc
+    
+    #################################Train_valid_test_splitter#################################
+    
+    # Split dataset into train/validation/test
+    indices = np.arange(physics.shape[1])
+    train_idx, test_idx = train_test_split(indices, test_size=0.1, random_state=42)
+    train_idx, valid_idx = train_test_split(train_idx, test_size=0.1111, random_state=42)
 
- 
+    physics_train= physics[:,train_idx]
+    chl = chl[train_idx]
+    
+    random_mask_train, random_mask_valid, random_mask_test = random_mask[train_idx], random_mask[valid_idx], np.zeros(random_mask.shape)
+
+
+    ################################# scaler #################################
+    # Normalize data if required
+    if dataloader_config['norm_mode']: 
+        
+        if not(dataloader_config['norm_mode'] in ('standard')):
+            raise ValueError("\"{}\" is not a valid mode for "
+                             "splitting. Only \"standard\" is hanlde with xarray loading.".format(dataloader_config['norm_mode']))   
+        if dataloader_config['norm_mode']=='standard':
+            scaler_phy=StandardScaler_xarray()
+            scaler_chl=StandardScaler_xarray()
+        
+            
+    scaler_phy.fit(physics_train)
+    scaler_chl.fit(chl,dims_first=False)
+        
+    print('scaler_done')
+    
+    
+    training_set=Dataset_psc_chl(mask=random_mask_train,
+                                 indexs=train_idx,
+                                 scaler_phy=scaler_phy,
+                                 scaler_chl=scaler_chl,
+                                 dataloader_config=dataloader_config,
+                                 transform=dataloader_config['transform'], 
+                                 completion=dataloader_config['completion'])
+    print('train done')
+
+    validation_set=Dataset_psc_chl(mask=random_mask_valid,
+                                   indexs=valid_idx,
+                                   scaler_phy=scaler_phy,
+                                   scaler_chl=scaler_chl,
+                                   dataloader_config=dataloader_config,
+                                   transform=dataloader_config['transform'], 
+                                   completion=dataloader_config['completion'])
+    print('train and valid done')
+    
+    test_set=Dataset_psc_chl(mask=random_mask_test,
+                             indexs=indices,
+                             scaler_phy=scaler_phy,
+                             scaler_chl=scaler_chl,
+                             dataloader_config=dataloader_config,
+                             transform=dataloader_config['transform'], 
+                             completion=dataloader_config['completion'],
+                             test=True)
+    
+    print('dataset_done')
+
+    training_generator   = DataLoader(training_set,
+                                      batch_size=dataloader_config['batch_size'],
+                                      shuffle=True,num_workers=4, prefetch_factor=4)
+                                      
+    
+    validation_generator = DataLoader(validation_set,
+                                      batch_size=dataloader_config['batch_size'],
+                                      shuffle=True,num_workers=4, prefetch_factor=4)
+    
+    test_generator = DataLoader(test_set, batch_size=1, shuffle=False)#, num_workers=4, prefetch_factor=4)#,pin_memory=True,num_workers=4)
+    print('generator')
+
+    return training_generator, validation_generator, test_generator, scaler_chl
+
 
 if __name__=='__main__': 
     
+
     path="/home/luther/Documents/npy_data/"
     #path="/datatmp/home/lollier/npy_data/"
     
-    dataloader_config={'dataset_path_inputs':path+"physics/processed_physics_1998_2024_monthly_lat50_100.npy",
-                       'dataset_path_inputs_test':path+"physics/processed_physics_1993_2024_monthly_lat50_100.npy",
-                       'dataset_path_psc':path+"PSC/cmems_xi/process/2002_2024_xi_cmems_psc_mo_lat50.nc",
-                       'dataset_path_chl':path+"chl/monthly_avw/chl_avw_m_glob_lat50_1998_2023.nc",
-                       'hplc_path':None,#path+"insitu/hplc_merged_new_glob_100km.csv",
-                       'transform':CustomMask(),
+    dataloader_config={'dataset_path_inputs':path+"physics/physics_completion/reduced_data.nc",
+                       'dataset_path_chl_psc':path+"completion/avw_roy/reduced_dataset.nc",
+                       'hplc_path':path+"insitu/hplc_merged_new_glob_100km.csv",
+                       'transform':None,
                        'batch_size': 4,
                        'norm_chl':True,
                        'norm_mode':'standard',
@@ -251,40 +292,12 @@ if __name__=='__main__':
                                          'NAtl':(-37,36),
                                          'NPac':(156,24),
                                          'SIO':(60,-32),
-                                         'SCTR':(80,-3)},
-                       'variables_physiques':[0,1,2],
-                       'phy_anomalies':[0,1,2,3,4,5,6], #[0,1,2,3...] list of which physical fields anomalies should be added
-                       'chl_anomalies':False, 
-                       } 
+                                         'SCTR':(80,-3)}}
+
         
     train_g, valid_g, test_g, scaler =get_dataloaders(dataloader_config)
     
 
-    #a, b =get_dataloaders(dataloader_config)
 
-        
-        
-        
-        # dataloader_config={'dataset_path_inputs':path+"physics/processed_physics_1998_2023_8d_lat50_100.npy",
-        #            'dataset_path_psc':path+"PSC/1998_2023_psc4_8d_100km_lat50.npy",
-        #            'dataset_path_chl':path+"chl/chl_avw_lat50_100km_8d_1998_2023.npy",
-        #            'hplc_path':path+"insitu/hplc_merged_new_glob_100km.csv",
-        #            'transform':None,
-        #            'batch_size': 32,
-        #            'norm_chl':True,
-        #            'norm_mode':'standard',
-        #            'log_chl':True,
-        #            'anomalies':0, #0 or False or None for classic behavior, 1 for chl anomalies, 2 for physics anomalies 
-        #            'completion':'zeros',
-        #            'stations_coord':{'SWAtl':(-55,-43),# stations withdrawed of the dataset for control
-        #                              'NAtl':(-37,36),
-        #                              'NPac':(156,24),
-        #                              'SIO':(60,-32),
-        #                              'SCTR':(80,-3)},
-        #            'variables_physiques':[0,1,2,3,4,5,6,7]} 
-        
-    
-    
-    
     
 

@@ -5,6 +5,11 @@ Created on Fri Mar 15 11:59:27 2024
 
 @author: luther
 
+Load the data (THIS DATALOADER IS FOR CHL ONLY)
+
+Apply preprocessing (compute mean and standard deviation for normalization, clip outlier values, take the logarithm of chlorophyll)
+
+Create the training, validation, and test sets
 """
 # +---------------------------------------------------------------------------------------+ #
 # |                                                                                       | #

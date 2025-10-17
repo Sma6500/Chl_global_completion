@@ -5,7 +5,7 @@ Created on Mon May  2 16:26:13 2022
 
 @author: lollier
 
-Class Trainer that instanciate the classes dataloaders and model in order to achieve training and validation step
+Trainer class that instantiates the Dataloader and Model classes in order to perform the training and validation steps.
 """
 # +---------------------------------------------------------------------------------------+ #
 # |                                                                                       | #
@@ -21,8 +21,6 @@ from model import model
 from utils.early_stopping import EarlyStopping
 from utils.functions import timer
 import torch
-# default `log_dir` is "runs" - we'll be more specific here
-from torch.cuda.amp import autocast, GradScaler
 import numpy as np
 import os
 
@@ -121,11 +119,6 @@ class Trainer():
         else : 
             raise ValueError("scheduler badly configured")
             return None
-        
-        #future tentative d'inclure un warmup, peut être voir warmup-pytorch
-        # if 'warmup' in scheduler_config.keys() and scheduler_config['warmup']:
-            
-        #     temp_scheduler=torch.optim.lr_scheduler.ConstantLR()
         
         
         scheduler.name=scheduler_config['scheduler']
@@ -454,6 +447,5 @@ if __name__=='__main__':
     
     trainer = Trainer(net, train_config, dataloader_config, criterion_config, optimizer_config, scheduler_config)
     
-    #trainer.run()
     
     
