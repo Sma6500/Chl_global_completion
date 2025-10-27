@@ -1,0 +1,94 @@
+
+
+________________________________________________________________________________
+NAME .....................: SmaAt_completion_avw_cmems_0
+Model ....................: SmaAt-UNet
+Model parameters..........: 4033732
+optim, scheduler \& starting lr....: AdamW ROP 0.001
+Test Loss ................: 0.0005200332487215696
+Epoch ....................: 90
+Best valid loss Epoch.....: 40
+
+Comment ..................: 
+SMaat completion MSE classique
+
+
+________________________________________________________________________________
+NAME .....................: SmaAt_completion_avw_roy_0
+Model ....................: SmaAt-UNet
+Model parameters..........: 4033732
+optim, scheduler \& starting lr....: AdamW ROP 0.001
+Test Loss ................: 0.0006965551655708652
+Epoch ....................: 83
+Best valid loss Epoch.....: 33
+
+Comment ..................: 
+SMaat completion MSE classique 
+
+
+________________________________________________________________________________
+NAME .....................: SmaAt_completion_occci_cmems_0
+Model ....................: SmaAt-UNet
+Model parameters..........: 4033732
+optim, scheduler \& starting lr....: AdamW ROP 0.001
+Test Loss ................: 0.00046558989897377105
+Epoch ....................: 73
+Best valid loss Epoch.....: 23
+
+Comment ..................: 
+SMaat completion MSE classique 
+
+
+
+
+
+________________________________________________________________________________
+NAME .....................: SmaAt_completion_yu2024_0
+Model ....................: SmaAt-UNet
+Model parameters..........: 4033093
+optim, scheduler \& starting lr....: AdamW ROP 0.001
+Test Loss ................: 0.009002677080580139
+Epoch ....................: 129
+Best valid loss Epoch.....: 79
+
+Comment ..................: 
+SMaat completion MSE classique, attention il manque les 3 derniers mois de 2023
+
+
+________________________________________________________________________________
+NAME .....................: SmaAt_completion_sun2023_0_test
+Model ....................: SmaAt-UNet
+Model parameters..........: 4033732
+optim, scheduler \& starting lr....: AdamW ROP 0.001
+Test Loss ................: 0.0005795760793746408
+Epoch ....................: 0
+Best valid loss Epoch.....: 0
+
+Comment ..................: 
+SMaat completion MSE classique
+
+
+________________________________________________________________________________
+NAME .....................: SmaAt_completion_yu2024_0
+Model ....................: SmaAt-UNet
+Model parameters..........: 275632
+optim, scheduler \& starting lr....: AdamW ROP 0.001
+Test Loss ................: 0.20485521746877713
+Epoch ....................: 168
+Best valid loss Epoch.....: 118
+
+Comment ..................: 
+SMaat completion MSE classique, attention il manque les 3 derniers mois de 2023
+
+
+________________________________________________________________________________
+NAME .....................: SmaAt_completion_yu2024_0
+Model ....................: SmaAt-UNet
+Model parameters..........: 4033093
+optim, scheduler \& starting lr....: AdamW ROP 0.001
+Test Loss ................: 0.006840686038027979
+Epoch ....................: 116
+Best valid loss Epoch.....: 66
+
+Comment ..................: 
+SMaat completion MSE classique, attention il manque les 3 derniers mois de 2023

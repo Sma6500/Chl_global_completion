@@ -5,11 +5,13 @@ Created on Mon May  2 15:00:59 2022
 
 @author: lollier*
 
-model class to pass to the trainer class
+Model class to pass to the Trainer class
 
-- instancie un modèle d'architecture sur device
-- instancie la/les fonctions de couts et l'optimizer
-- run le forward à partir des inputs et targets et renvoie la prediction ou la loss
+Instantiates a model architecture on the device
+
+Instantiates the loss function(s) and the optimizer
+
+Runs the forward pass from the inputs and targets, and returns either the prediction or the loss
 """
 # +---------------------------------------------------------------------------------------+ #
 # |                                                                                       | #
@@ -17,7 +19,7 @@ model class to pass to the trainer class
 # |                                                                                       | #
 # +---------------------------------------------------------------------------------------+ #
 import torch
-from utils.losses import MSE_Loss_masked, CHL_underestimation, KL_divergence, quantile_loss, HingeLoss_masked, BCELoss_masked
+from utils.losses import MSE_Loss_masked, quantile_loss, HingeLoss_masked, BCELoss_masked
 from torch.cuda.amp import GradScaler
 
 #from lion_pytorch import Lion
@@ -31,11 +33,7 @@ class model():
     """
     TO DO :
         - handle parallelized training
-        - think on a nicer way to implement criterion and __init_criterion__ *
-        
-        
-        *c'est un peu mieux mais rien de dingue, on boucle sur pred et target pour des loss sur plusieures sorties
-        et si jamais on veut mettre plusieurs loss sur une seule sortie il faut la pimper dans losses.py
+        - think on a nicer way to implement criterion and __init_criterion__ 
     """
     
     def __init__(self, net, device, criterion_config, optimizer_config):
@@ -199,13 +197,6 @@ class model():
         if train:
             self.optimizer.zero_grad()
             
-            
-        #Pour les partials conv il faut gérer le mask directement dans l'architecture ou le dataloader
-        # if 'Partial_conv' in self.config.keys() and self.config['Partial_conv']:
-        #     mask=torch.ones(item.size())*(~torch.isnan(item))
-        #     predictions,_ = self.net(item.to(self.device), mask.to(self.device))
-        # else :
-        
         with torch.autocast(device_type='cuda', dtype=torch.float16):
             predictions=self.net(inputs.to(self.device))
             
@@ -265,15 +256,3 @@ if __name__=='__main__':
     print(test_model.forward(test_inp, test_targ))
     
  
-        # if 'Under_chl' in criterion_config.keys() and criterion_config['Under_chl']!=0.:
-                        
-        #     losses.append(CHL_underestimation(index=index_loss))
-        #     weights.append(criterion_config['Under_chl'])
-        #     losses_names.append('Under_chl')
-            
-                
-        # if 'KL_div' in criterion_config.keys() and criterion_config['KL_div']!=0.:
-            
-        #     losses.append(KL_divergence())
-        #     weights.append(criterion_config['KL_div'])
-        #     losses_names.append('KL_div')

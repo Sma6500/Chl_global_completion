@@ -76,11 +76,6 @@ def main(model_config, dataloader_config, train_config, criterion_config, optimi
         raise ValueError("\"{}\" is not a valid mode for "
                          "activation. Only \"SiLU\" and "
                          "\"ReLU\" are allowed.".format(model_config['activation']))
-
-    if 'time2vec' in model_config.keys() and model_config['time2vec']:
-        time_encoded=model_config['time2vec']
-    else :
-        time_encoded=False
         
 
     n_classes=model_config.get('n_classes', 4)
@@ -97,25 +92,6 @@ def main(model_config, dataloader_config, train_config, criterion_config, optimi
                   activation=model_config['activation'],
                   chl=model_config['chl'])
         
-    elif model_config['model']=='UNet_DSC':
-        
-        net=UNet_DSC(in_channels=model_config['in_channels'],
-                     out_channels=model_config['n_classes'],
-                     depth=model_config['depth'],
-                     start_filts=nb_layers,
-                     merge_mode=model_config['merge_mode'], 
-                     activation=model_config['activation'],
-                     chl=model_config['chl'],
-                     kernels_per_layer=model_config['kernels_per_layer'])
-        
-    elif model_config['model']=='UNet_CBAM':
-                
-        net=UNet_CBAM(n_channels=model_config['in_channels'],
-                     n_classes=model_config['n_classes'],#tjrs 4 pour PSC et CHL
-                     depth=model_config['depth'],
-                     activation=activation,
-                     nb_layers=nb_layers,
-                     chl=model_config['chl'],)
         
     elif model_config['model']=='SmaAt-UNet':
 
@@ -124,18 +100,7 @@ def main(model_config, dataloader_config, train_config, criterion_config, optimi
                        activation=activation,
                        kernels_per_layer=model_config['kernels_per_layer'],
                        chl=model_config['chl'],
-                       nb_layers=nb_layers,
-                       time_encoded=time_encoded)
-        
-    elif model_config['model']=='SmaAt-BAM':
-
-        net=SmaAt_UNet(n_channels=model_config['in_channels'], 
-                       n_classes=n_classes,
-                       activation=activation,
-                       kernels_per_layer=model_config['kernels_per_layer'],
-                       chl=model_config['chl'],
-                       nb_layers=nb_layers,
-                       time_encoded=time_encoded)
+                       nb_layers=nb_layers)
 
     else :
         raise ValueError("\"{}\" is not a valid mode for model.".format(model_config['model']))

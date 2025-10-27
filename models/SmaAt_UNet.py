@@ -21,9 +21,7 @@ from torch.nn.modules.utils import _triple
 import torch.nn.functional as F
 
 import numpy as np
-import math
 
-from t2vec import Time2Vec
 
 # +---------------------------------------------------------------------------------------+ #
 # |                                                                                       | #
@@ -305,7 +303,6 @@ class SmaAt_UNet(nn.Module):
         activation=nn.ReLU(),
         chl=False,
         nb_layers=8,
-        time_encoded=False
     ):
         super(SmaAt_UNet, self).__init__()
         self.n_channels = n_channels
@@ -316,11 +313,6 @@ class SmaAt_UNet(nn.Module):
         self.nb_layers=nb_layers
         reduction_ratio = reduction_ratio
         
-        self.time_encoded=time_encoded
-        if time_encoded:
-            print(f"adding time2vec encoding with trend and {time_encoded} frequencies \nTime encoding scalar map is expected with input\nInput shape is currently (100,360)")
-            self.t2v=Time2Vec(time_encoded, self.n_channels, (100,360))
-            self.n_channels += time_encoded+1
 
         self.inc = DoubleConvDS(self.n_channels, self.nb_layers, kernels_per_layer=kernels_per_layer, activation=activation)
         self.cbam1 = CBAM(self.nb_layers, reduction_ratio=reduction_ratio, activation=activation)
